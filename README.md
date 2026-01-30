@@ -151,6 +151,69 @@ A clickable (web)link can be inserted on nearly any scribus object in 2 steps:
 ![Illustration: Include dynamic clickable (web)links](pic/weblink_pdfannotation.png)
 
 
+Markdown Formatting
+--------------
+
+**Scribus Generator** automatically converts Markdown syntax in your CSV data to formatted Scribus text. This makes it easy to add **bold**, *italic*, headings, lists, and more to your generated documents without manual formatting.
+
+### Supported Markdown Features
+
+**Scribus Generator** supports the following Markdown syntax:
+
+| Markdown Syntax | Result | Scribus Implementation |
+| ---- | ---- | ---- |
+| `**bold text**` or `__bold text__` | **bold text** | Uses bold font variant (e.g. Arial Bold) |
+| `*italic text*` or `_italic text_` | *italic text* | Uses italic font variant (e.g. Arial Italic) |
+| `***bold italic***` | ***bold italic*** | Uses bold italic font variant |
+| `` `inline code` `` | `inline code` | Uses Courier New monospace font |
+| `# Heading 1` | Large heading | 2x base font size |
+| `## Heading 2` | Medium heading | 1.5x base font size |
+| `### Heading 3` through `###### Heading 6` | Smaller headings | Progressively smaller sizes |
+| `[Link text](url)` | Link | Converted to "Link text (url)" format for print |
+| `- Item` or `* Item` or `+ Item` | Bullet list | • Item with line breaks |
+| `1. First` `2. Second` | Numbered list | 1. First with line breaks |
+
+### Using Markdown in Your Data
+
+Simply include Markdown syntax directly in your CSV data. No special markers needed - **Scribus Generator** automatically detects and converts it:
+
+```csv
+name,title,description
+John Doe,**Senior Developer**,Working with *Python* and **Scribus**. Visit [our site](https://example.com).
+Jane Smith,*Product Manager*,"Leading teams with **agile** methodologies:
+- Sprint planning
+- Daily standups  
+- Retrospectives"
+```
+
+The Markdown will be automatically converted to properly formatted text in your generated documents, with appropriate fonts (bold, italic, monospace) and line breaks.
+
+### Controlling Markdown Conversion
+
+Markdown conversion is **enabled by default**. You can control it in three ways:
+
+1. **GUI**: Use the "Convert Markdown" checkbox in the settings dialog
+2. **Command Line**: Use `--markdown` (enable) or `--no-markdown` (disable) flags
+3. **Code**: Set `CONST.MARKDOWN_ENABLED` in `ScribusGeneratorBackend.py`
+
+To disable Markdown from command line:
+```bash
+python ScribusGeneratorCLI.py --no-markdown -c data.csv template.sla
+```
+
+### Tips for Best Results
+
+- Markdown works best in plain text frames - the original font family is preserved while applying styles
+- Use Markdown for emphasis and structure, not complex layouts
+- For long formatted text, consider breaking it into multiple lines in your CSV
+- Inline code (`` `code` ``) will use Courier New - ensure this font is available in your Scribus installation
+- Links are converted to printable "text (url)" format - perfect for business cards, flyers, etc.
+
+### Example
+
+See [example/markdown_test.csv](example/markdown_test.csv) and [example/markdown_test.sla](example/markdown_test.sla) for a working example of Markdown in Scribus Generator.
+
+
 Merged output - single document
 ------------
 Instead of generating a single (sla or pdf) file for each data row, you can generate a single file that merges all these. Simply select the option accordingly to get the result illustrated below in a single Scribus (and/or pdf) file. If your document layout has multiple pages (double sided, or folded leaflet), it is important for Scribus Generator to be able to merge the files that your template has the same number of pages (or a multiple thereof). For instance, for a 3-fold document, your source sla should have 3, 6, or 9 pages (or any multiple of 3).
