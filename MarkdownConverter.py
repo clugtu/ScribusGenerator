@@ -150,6 +150,11 @@ class HTMLToScribusConverter(HTMLParser):
         
         # Current text buffer
         self.text_buffer = ''
+        
+        # List tracking
+        self.in_unordered_list = False
+        self.in_ordered_list = False
+        self.list_item_number = 0
     
     def get_current_font(self):
         """Get current font based on format stack."""
@@ -220,6 +225,18 @@ class HTMLToScribusConverter(HTMLParser):
         if tag == 'br':
             self.flush_text_buffer()
             self.itext_elements.append('<breakline />')
+        elif tag == 'ul':
+            self.in_unordered_list = True
+        elif tag == 'ol':
+            self.in_ordered_list = True
+            self.list_item_number = 0
+        elif tag == 'li':
+            # Add bullet or number at start of list item
+            if self.in_unordered_list:
+                self.text_buffer = '• '
+            elif self.in_ordered_list:
+                self.list_item_number += 1
+                self.text_buffer = f'{self.list_item_number}. '
         elif tag == 'a':
             # Extract URL for later
             for attr_name, attr_value in attrs:
@@ -247,10 +264,12 @@ class HTMLToScribusConverter(HTMLParser):
             self.flush_text_buffer()
             self.itext_elements.append('<breakline />')
         
-        # Handle list items - add bullet or number
+        # Handle list end
         if tag == 'ul':
+            self.in_unordered_list = False
             self.flush_text_buffer()
         elif tag == 'ol':
+            self.in_ordered_list = False
             self.flush_text_buffer()
     
     def handle_data(self, data):
