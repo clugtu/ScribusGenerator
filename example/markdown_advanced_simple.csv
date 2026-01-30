@@ -1,0 +1,4 @@
+name,title,skills,bio,contact
+Alice Johnson,Product Manager,"**Agile** methodology, *User research*, `SQL` analytics","Alice has **10+ years** of experience in *product management*. Visit [LinkedIn](https://linkedin.com/in/alice)!",alice@example.com
+Bob Smith,Technical Lead,"**Python** & `JavaScript`, *Cloud architecture*, API design","Bob is a **senior engineer** with expertise in microservices. Check out his [portfolio](https://bobsmith.dev)!",bob@example.com
+Carol White,UX Designer,"**Figma** & `Sketch`, *User testing*, Design systems","Carol creates **beautiful** and *functional* designs. See her [Behance](https://behance.net/carol)!",carol@example.com
