@@ -36,6 +36,7 @@ import xml.etree.ElementTree as ET
 import json
 import re
 import string, math
+from MarkdownConverter import MarkdownConverter
 
 
 class CONST:
@@ -69,6 +70,12 @@ class CONST:
     OUTPUTCOUNT_VAR = 'COUNT'
     # set to the minimum amount of numbers you want to force in the output files name counter. 3 leads to 001,002,...; default is 1, 
     OUTPUTCOUNT_FILL = 1
+    # set to 1 to enable Markdown conversion in CSV data fields
+    MARKDOWN_ENABLED = 1
+    # set to 1 to auto-detect Markdown syntax, 0 to require explicit marker
+    MARKDOWN_AUTO_DETECT = 1
+    # optional marker to explicitly enable Markdown for a field (used when MARKDOWN_AUTO_DETECT = 0)
+    MARKDOWN_MARKER = '%MARKDOWN%'
 
 class ScribusGenerator:
     # Column headers (= keys of each data record)
@@ -81,6 +88,17 @@ class ScribusGenerator:
         logging.config.fileConfig(os.path.join(os.path.abspath(
             os.path.dirname(__file__)), 'logging.conf'
         ))
+        
+        # Initialize Markdown converter if enabled
+        if CONST.MARKDOWN_ENABLED:
+            try:
+                self.markdown_converter = MarkdownConverter()
+                logging.info('Markdown converter initialized')
+            except Exception as e:
+                logging.warning(f'Could not initialize Markdown converter: {e}. Markdown will be disabled.')
+                self.markdown_converter = None
+        else:
+            self.markdown_converter = None
 
         # TODO: Check if logging works, if not warn user to configure log file path and disable.
         logging.info('ScribusGenerator initialized')
@@ -552,6 +570,22 @@ class ScribusGenerator:
                     replaced_strings
                 )))
                 replacements['%VAR_' + CONST.OUTPUTCOUNT_VAR + '%'] = str(index + index_first_of_batch)
+                
+                # Convert Markdown in replacement values if enabled
+                if self.markdown_converter:
+                    for key, value in list(replacements.items()):
+                        if value and isinstance(value, str):
+                            # Auto-detect or check for explicit marker
+                            has_markdown = False
+                            if CONST.MARKDOWN_AUTO_DETECT:
+                                has_markdown = self.markdown_converter.detect_markdown(value)
+                            elif CONST.MARKDOWN_MARKER in value:
+                                has_markdown = True
+                                value = value.replace(CONST.MARKDOWN_MARKER, '')
+                            
+                            if has_markdown:
+                                logging.debug(f'Converting Markdown in field: {key[:50]}')
+                                replacements[key] = self.markdown_converter.convert_markdown_to_scribus_xml(value)
 
                 logging.debug('Replacements updated: %s' % replacements)
                 replacements_outdated = 0
