@@ -65,6 +65,8 @@ class GeneratorControl:
         self.__toVariable = StringVar()
         self.__toVariable.set(CONST.EMPTY)
         self.__closeDialogVariable = IntVar()
+        self.__markdownEnabledCheckboxVariable = IntVar()
+        self.__markdownEnabledCheckboxVariable.set(CONST.MARKDOWN_ENABLED)
         self.__root = root
         if scribus.haveDoc():
             doc = scribus.getDocName()
@@ -133,6 +135,9 @@ class GeneratorControl:
     def getCloseDialogVariable(self):
         return self.__closeDialogVariable
 
+    def getMarkdownEnabledCheckboxVariable(self):
+        return self.__markdownEnabledCheckboxVariable
+
 
     def allValuesSet(self):
         # Simple check whether input fields are NOT EMPTY.
@@ -161,7 +166,8 @@ class GeneratorControl:
             firstRow=self.__fromVariable.get(),
             lastRow=self.__toVariable.get(),
             saveSettings=self.__saveCheckboxVariable.get(),
-            closeDialog=self.__closeDialogVariable.get()
+            closeDialog=self.__closeDialogVariable.get(),
+            markdownEnabled=self.__markdownEnabledCheckboxVariable.get()
         )
         return result
 
@@ -380,6 +386,13 @@ class GeneratorDialog:
         saveCheckbox = Checkbutton(
             miscFrame, variable=self.__ctrl.getSaveCheckboxVariable())
         saveCheckbox.grid(column=1, row=1, padx=5, pady=5, sticky='w')
+
+        markdownLabel = Label(miscFrame, text='Convert Markdown:',
+                          width=15, anchor='w')
+        markdownLabel.grid(column=0, row=2, padx=5, pady=5, sticky='w')
+        markdownCheckbox = Checkbutton(
+            miscFrame, variable=self.__ctrl.getMarkdownEnabledCheckboxVariable())
+        markdownCheckbox.grid(column=1, row=2, padx=5, pady=5, sticky='w')
 
         closeLabel = Label(miscFrame, text='Close dialog on success:',
                           width=20, anchor='w')

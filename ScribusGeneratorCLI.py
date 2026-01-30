@@ -95,6 +95,10 @@ parser.add_argument('-s', '--save', action='store_true', default=False,
                     help='Save current generator settings in (each) Scribus input file(s).')
 parser.add_argument('-l', '--load', action='store_true', default=False,
                     help='Load generator settings from (each) Scribus input file(s). Overloads all options (but -h).')
+parser.add_argument('--markdown', action='store_true', default=None,
+                    help='Enable Markdown conversion in CSV data fields (detects **bold**, *italic*, headings, lists, etc.). Enabled by default.')
+parser.add_argument('--no-markdown', action='store_true', default=False, dest='noMarkdown',
+                    help='Disable Markdown conversion in CSV data fields.')
 
 
 def ife(test, if_result, else_result):
@@ -107,6 +111,13 @@ def ife(test, if_result, else_result):
 
 # handle arguments
 args = parser.parse_args()
+
+# Determine markdown setting: prioritize explicit flags, otherwise use default
+markdownEnabled = CONST.MARKDOWN_ENABLED
+if args.noMarkdown:
+    markdownEnabled = CONST.FALSE
+elif args.markdown:
+    markdownEnabled = CONST.TRUE
 
 # if(args.pdfOnly or (not args.fast)): # for pdf from CLI
 #     print("\nPDF generation is currently not available from command line, but SLA is. \nSimply add the '--noPdf' option to your command and it will run just fine.\n")
@@ -132,7 +143,8 @@ dataObject = GeneratorDataObject(
     singleOutput=args.merge,
     firstRow=args.firstRow,
     lastRow=args.lastRow,
-    saveSettings=args.save)
+    saveSettings=args.save,
+    markdownEnabled=markdownEnabled)
 
 generator = ScribusGenerator(dataObject)
 log = generator.get_log()

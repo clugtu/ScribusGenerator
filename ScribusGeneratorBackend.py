@@ -89,8 +89,9 @@ class ScribusGenerator:
             os.path.dirname(__file__)), 'logging.conf'
         ))
         
-        # Initialize Markdown converter if enabled
-        if CONST.MARKDOWN_ENABLED:
+        # Initialize Markdown converter if enabled (check both CONST and dataObject setting)
+        markdown_enabled = dataObject.getMarkdownEnabled() if hasattr(dataObject, 'getMarkdownEnabled') else CONST.MARKDOWN_ENABLED
+        if markdown_enabled:
             try:
                 self.markdown_converter = MarkdownConverter()
                 logging.info('Markdown converter initialized')
@@ -98,6 +99,7 @@ class ScribusGenerator:
                 logging.warning(f'Could not initialize Markdown converter: {e}. Markdown will be disabled.')
                 self.markdown_converter = None
         else:
+            logging.info('Markdown conversion disabled by user')
             self.markdown_converter = None
 
         # TODO: Check if logging works, if not warn user to configure log file path and disable.
@@ -987,7 +989,8 @@ class GeneratorDataObject:
         firstRow=CONST.EMPTY,
         lastRow=CONST.EMPTY,
         saveSettings=CONST.TRUE,
-        closeDialog=CONST.FALSE
+        closeDialog=CONST.FALSE,
+        markdownEnabled=CONST.MARKDOWN_ENABLED
     ):
         self.__scribusSourceFile = scribusSourceFile
         self.__dataSourceFile = dataSourceFile
@@ -1002,6 +1005,7 @@ class GeneratorDataObject:
         self.__lastRow = lastRow
         self.__saveSettings = saveSettings
         self.__closeDialog = closeDialog
+        self.__markdownEnabled = markdownEnabled
 
 
     # Getters
@@ -1044,6 +1048,9 @@ class GeneratorDataObject:
 
     def getCloseDialog(self):
         return self.__closeDialog
+
+    def getMarkdownEnabled(self):
+        return self.__markdownEnabled
 
 
     # Setters
