@@ -536,6 +536,41 @@ class ScribusGenerator:
 
         return result
 
+    def process_markdown_in_itext(self, line, replacements):
+        """
+        Process a line containing ITEXT elements, converting markdown if present.
+        
+        This handles the special case where we need to replace an ITEXT element
+        containing markdown with multiple ITEXT elements with proper formatting.
+        """
+        # Find all ITEXT elements with variables in their CH attribute
+        itext_pattern = r'(<ITEXT[^>]+CH=")(%VAR_[^"]+)("[^>]*/>)'
+        
+        def replace_itext(match):
+            before = match.group(1)  # <ITEXT ... CH="
+            var_placeholder = match.group(2)  # %VAR_something%
+            after = match.group(3)  # " .../>
+            
+            # Get the replacement value
+            replacement_value = replacements.get(var_placeholder, var_placeholder)
+            
+            # Check if this is markdown content (already converted to ITEXT elements)
+            if replacement_value and isinstance(replacement_value, str) and replacement_value.startswith('<ITEXT'):
+                # This is already converted markdown - return it as-is
+                logging.debug(f'Replacing ITEXT element with markdown-converted content: {replacement_value[:100]}')
+                return replacement_value
+            else:
+                # Regular text - keep original ITEXT structure
+                return before + str(replacement_value) + after
+        
+        # Replace all ITEXT elements
+        result = re.sub(itext_pattern, replace_itext, line)
+        
+        # Also handle any remaining variables not in ITEXT
+        result = self.multiple_replace(result, replacements)
+        
+        return result
+
 
     def substitute_data(self, var_names: list, data: list, template: list, keep_tabs_lf=0, clean=CONST.CLEAN_UNUSED_EMPTY_VARS, index_first_of_batch=0):
         # for each list of *data* array, substitute all %VAR_*var_names*% placeholders in 
@@ -599,7 +634,12 @@ class ScribusGenerator:
             # Replace placeholders with actual data
             logging.debug("replacing VARS_* in %s" % line[:50].strip())
             #logging.debug("  with replacements %s" % replacements)
-            line = self.multiple_replace(line, replacements)
+            
+            # Check if this line has ITEXT with Markdown content
+            if '<ITEXT' in line and self.markdown_converter:
+                line = self.process_markdown_in_itext(line, replacements)
+            else:
+                line = self.multiple_replace(line, replacements)
             #logging.debug("replaced in line: %s" % line)
 
             # Remove (& trim) any (unused) %VAR_\w*% like string
