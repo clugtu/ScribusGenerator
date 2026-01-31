@@ -222,7 +222,7 @@ class ScribusGenerator:
         if not os.path.exists(data_file):
         # .. otherwise, log error & raise exception
             logging.error('Data file not found: %s' % (data_file))
-            raise
+            raise IOError('Data file not found: %s' % (data_file))
 
         logging.debug('Parsing data file %s' % (data_file))
 
@@ -440,7 +440,19 @@ class ScribusGenerator:
                         index_current, self.__dataObject.getOutputFileName(), item, len(str(data_count))
                     )
 
-                    self.write_sla_file(ET.fromstring(output), output_file)
+                    try:
+                        self.write_sla_file(ET.fromstring(output), output_file)
+                    except ET.ParseError as e:
+                        # Save problematic XML for debugging
+                        debug_file = self.build_file_path(
+                            self.__dataObject.getOutputDirectory(), 
+                            output_file + '_debug_xml', 
+                            'txt'
+                        )
+                        with open(debug_file, 'w', encoding='utf-8') as f:
+                            f.write(output)
+                        logging.error(f'XML Parse Error: {e}. Problematic XML saved to: {debug_file}')
+                        raise ET.ParseError(f'Invalid XML generated at column {e.position[1]}. Debug file saved to: {debug_file}') from e
                     output_files.append(output_file)
 
                 buffer = []
@@ -538,29 +550,178 @@ class ScribusGenerator:
 
         return result
 
-    def process_markdown_in_itext(self, line, replacements):
+    def extract_font_info_from_itext(self, itext_element):
+        """
+        Extract font information from an ITEXT element or its context.
+        
+        Returns tuple of (font, fontsize, color) with defaults if not found.
+        """
+        # Try to extract FONT attribute from ITEXT element
+        font_match = re.search(r'FONT="([^"]+)"', itext_element)
+        font = font_match.group(1) if font_match else 'Arial Regular'
+        
+        # Try to extract FONTSIZE attribute
+        size_match = re.search(r'FONTSIZE="([^"]+)"', itext_element)
+        fontsize = size_match.group(1) if size_match else '12'
+        
+        # Try to extract FCOLOR attribute
+        color_match = re.search(r'FCOLOR="([^"]+)"', itext_element)
+        color = color_match.group(1) if color_match else 'Black'
+        
+        return (font, fontsize, color)
+    
+    def extract_font_from_paragraph_style(self, line, template):
+        """
+        Extract font from paragraph style definition by looking up PSTYLE.
+        
+        Returns font family name or None if not found.
+        """
+        # Try to find PSTYLE attribute in the line
+        pstyle_match = re.search(r'PSTYLE="([^"]+)"', line)
+        if not pstyle_match:
+            return None
+        
+        style_name = pstyle_match.group(1)
+        logging.debug(f'Looking up paragraph style: {style_name}')
+        
+        # Look for <CHARSTYLE> or <STYLE> with matching NAME and extract FONT
+        # First check character styles
+        for template_line in template:
+            if f'CNAME="{style_name}"' in template_line:
+                font_match = re.search(r'FONT="([^"]+)"', template_line)
+                if font_match:
+                    logging.debug(f'Found font from character style {style_name}: {font_match.group(1)}')
+                    return font_match.group(1)
+            
+            # Check paragraph styles (though they usually don't have FONT, just FONTSIZE)
+            if f'NAME="{style_name}"' in template_line and '<STYLE' in template_line:
+                font_match = re.search(r'FONT="([^"]+)"', template_line)
+                if font_match:
+                    logging.debug(f'Found font from paragraph style {style_name}: {font_match.group(1)}')
+                    return font_match.group(1)
+        
+        # If style doesn't specify font, look for default character style
+        for template_line in template:
+            if 'DefaultStyle="1"' in template_line and 'CNAME=' in template_line:
+                font_match = re.search(r'FONT="([^"]+)"', template_line)
+                if font_match:
+                    logging.debug(f'Using default character style font: {font_match.group(1)}')
+                    return font_match.group(1)
+        
+        return None
+
+    def extract_font_info_from_context(self, line, template=None):
+        """
+        Extract font information from line context (PAGEOBJECT or trail).
+        
+        Returns tuple of (font, fontsize, color) with defaults if not found.
+        """
+        # Try to find IFONT and ISIZE from PAGEOBJECT
+        font_match = re.search(r'IFONT="([^"]+)"', line)
+        font = font_match.group(1) if font_match else None
+        
+        size_match = re.search(r'ISIZE="([^"]+)"', line)
+        fontsize = size_match.group(1) if size_match else None
+        
+        # Try to find from trail element
+        if not font:
+            trail_font = re.search(r'<trail[^>]+FONT="([^"]+)"', line)
+            font = trail_font.group(1) if trail_font else 'Arial Regular'
+        
+        if not fontsize:
+            trail_size = re.search(r'<trail[^>]+FONTSIZE="([^"]+)"', line)
+            fontsize = trail_size.group(1) if trail_size else '12'
+        
+        # Try to find color from trail
+        trail_color = re.search(r'<trail[^>]+FCOLOR="([^"]+)"', line)
+        color = trail_color.group(1) if trail_color else 'Black'
+        
+        return (font, fontsize, color)
+
+    def process_markdown_in_itext(self, line, replacements, template):
         """
         Process a line containing ITEXT elements, converting markdown if present.
         
         This handles the special case where we need to replace an ITEXT element
         containing markdown with multiple ITEXT elements with proper formatting.
         """
+        # Try to get font from paragraph style first
+        style_font = self.extract_font_from_paragraph_style(line, template)
+        
+        # Extract font context from the line (PAGEOBJECT or trail) as fallback
+        default_font, default_fontsize, default_color = self.extract_font_info_from_context(line, template)
+        
+        # Use style font if found, otherwise use context font
+        if style_font:
+            default_font = style_font
+        
         # Find all ITEXT elements with variables in their CH attribute
-        itext_pattern = r'(<ITEXT[^>]+CH=")(%VAR_[^"]+)("[^>]*/>)'
+        itext_pattern = r'(<ITEXT[^>]*CH=")(%VAR_[^"]+)("[^>]*/>)'
         
         def replace_itext(match):
             before = match.group(1)  # <ITEXT ... CH="
             var_placeholder = match.group(2)  # %VAR_something%
             after = match.group(3)  # " .../>
+            full_element = match.group(0)  # Full <ITEXT ... />
+            
+            # Extract font info from this specific ITEXT element
+            elem_font, elem_fontsize, elem_color = self.extract_font_info_from_itext(full_element)
+            
+            # Check if template ITEXT has explicit font attributes
+            has_explicit_font = 'FONT=' in full_element
+            has_explicit_size = 'FONTSIZE=' in full_element
+            
+            # Use element-specific font if present, otherwise use defaults from context
+            use_font = elem_font if has_explicit_font else default_font
+            use_fontsize = elem_fontsize if has_explicit_size else default_fontsize
+            use_color = elem_color if 'FCOLOR=' in full_element else default_color
             
             # Get the replacement value
             replacement_value = replacements.get(var_placeholder, var_placeholder)
             
             # Check if this is markdown content (already converted to ITEXT elements)
             if replacement_value and isinstance(replacement_value, str) and replacement_value.startswith('<ITEXT'):
-                # This is already converted markdown - return it as-is
-                logging.debug(f'Replacing ITEXT element with markdown-converted content: {replacement_value[:100]}')
-                return replacement_value
+                # This is already converted markdown
+                logging.debug('Adapting markdown fonts to match paragraph style font family')
+                updated_markdown = replacement_value
+                
+                # Get the base font family from the context (paragraph style or PAGEOBJECT)
+                # Remove the style suffix (Regular, Bold, Italic, etc)
+                font_family = default_font.rsplit(' ', 1)[0] if ' ' in default_font else default_font
+                
+                # Replace font family while preserving bold/italic variants
+                # Update Arial Regular -> [template family] Regular
+                updated_markdown = re.sub(
+                    r'FONT="[^"]*\s+Regular"',
+                    f'FONT="{font_family} Regular"',
+                    updated_markdown
+                )
+                
+                # Update Arial Bold -> [template family] Bold
+                updated_markdown = re.sub(
+                    r'FONT="[^"]*\s+Bold"(?![^"]*Italic)',
+                    f'FONT="{font_family} Bold"',
+                    updated_markdown
+                )
+                
+                # Update Arial Italic -> [template family] Italic (not Bold Italic)
+                updated_markdown = re.sub(
+                    r'FONT="([^"]*\s+)?Italic"(?![^<>]*Bold)',
+                    f'FONT="{font_family} Italic"',
+                    updated_markdown
+                )
+                
+                # Update Arial Bold Italic -> [template family] Bold Italic
+                updated_markdown = re.sub(
+                    r'FONT="[^"]*\s+Bold\s+Italic"',
+                    f'FONT="{font_family} Bold Italic"',
+                    updated_markdown
+                )
+                
+                # Remove all FONTSIZE attributes to inherit from paragraph style
+                updated_markdown = re.sub(r'\s+FONTSIZE="[^"]*"', '', updated_markdown)
+                
+                return updated_markdown
             else:
                 # Regular text - keep original ITEXT structure
                 return before + str(replacement_value) + after
@@ -639,7 +800,7 @@ class ScribusGenerator:
             
             # Check if this line has ITEXT with Markdown content
             if '<ITEXT' in line and self.markdown_converter:
-                line = self.process_markdown_in_itext(line, replacements)
+                line = self.process_markdown_in_itext(line, replacements, template)
             else:
                 line = self.multiple_replace(line, replacements)
             #logging.debug("replaced in line: %s" % line)

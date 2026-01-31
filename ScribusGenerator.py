@@ -196,8 +196,17 @@ class GeneratorControl:
                 tkinter.messagebox.showerror(
                     title='Variable Error', message="Could not find the value for one variable.\nplease check your Data File and Data Separator settings.\n\n %s" % e)
             except Exception:
+                error_trace = traceback.format_exc()
+                # Copy error to clipboard for easy reporting
+                try:
+                    self.__root.clipboard_clear()
+                    self.__root.clipboard_append(error_trace)
+                    self.__root.update()  # Keep clipboard after window closes
+                    clipboard_msg = "\n\n(Error details copied to clipboard)"
+                except:
+                    clipboard_msg = ""
                 tkinter.messagebox.showerror(title='Error Scribus Generator',
-                                       message="Something went wrong.\n\nRead the log file for more (in your home directory)."+traceback.format_exc())
+                                       message="Something went wrong.\n\nRead the log file for more (in your home directory)." + clipboard_msg + "\n\n" + error_trace)
         else:
             tkinter.messagebox.showerror(
                 title='Validation failed', message='Please check if all settings have been set correctly!')
